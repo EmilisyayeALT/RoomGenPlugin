@@ -92,11 +92,13 @@ local clearButton = button("Clear generated rooms")
 local floorStatus = label("")
 
 label(" ", false)
+local autoAssignButton = button("Auto assign")
+local assignToRooms = button("Place inside Rooms asset")
+label(" ", false)
 label("Clip test", true)
+label(`Generate! puts a straight room at the rooms entrance and exit right where the room is and checks both joins.`)
 local roomLabel = label("Room: none")
 local pickRoomButton = button("Pick room")
-local autoAssignButton = button("Auto assign")
-label(`Generate! puts a straight room at the rooms entrance and exit right where the room is and checks both joins.`)
 local pairLabel = label("Door pairing: -")
 local nextPairButton = button("Next door pairing")
 local testButton = button("Generate!")
@@ -160,7 +162,7 @@ end
 
 local function refresh()
 	if testRoom and not testRoom.Parent then testRoom = nil end
-	
+
 	roomLabel.Text = "Room: " .. (if testRoom then testRoom:GetFullName() else "none")
 	pairLabel.Text = "Door pairing: " .. (if pairCount then `{(pairIndex - 1) % pairCount + 1}/{pairCount}` else "-")
 	pickRoomButton.Text = if picking then "Click a room or select it... (Esc to cancel)" else "Pick room"
@@ -176,7 +178,7 @@ local function topModel(instance)
 		if instance:IsA("Model") then found = instance end
 		instance = instance.Parent
 	end
-	
+
 	return found
 end
 
@@ -188,7 +190,7 @@ end
 
 local function pick(model)
 	if not (picking and model) then return end
-	
+
 	testRoom = model
 	pairIndex, pairCount = 1, nil
 	stopPicking()
@@ -222,14 +224,14 @@ local function showClips(clips, extent)
 	clearVisuals()
 	visuals = Instance.new("Folder")
 	visuals.Name = "RoomGenClips"
-	
+
 	local boxed = {}
 	for _, clip in clips do
 		local a, b = clip[1], clip[2]
 		local halfA, halfB = extent(a) / 2, extent(b) / 2
 		local low = (a.Position - halfA):Max(b.Position - halfB)
 		local high = (a.Position + halfA):Min(b.Position + halfB)
-		
+
 		local box = Instance.new("BoxHandleAdornment")
 		box.Adornee = workspace.Terrain
 		box.CFrame = CFrame.new((low + high) / 2)
@@ -239,11 +241,11 @@ local function showClips(clips, extent)
 		box.AlwaysOnTop = true
 		box.ZIndex = 5
 		box.Parent = visuals
-		
+
 		for _, part in {a, b} do
 			if boxed[part] then continue end
 			boxed[part] = true
-			
+
 			local outline = Instance.new("SelectionBox")
 			outline.Adornee = part
 			outline.Color3 = if part == a then Color3.fromRGB(255, 60, 60) else Color3.fromRGB(255, 170, 0)
@@ -253,7 +255,7 @@ local function showClips(clips, extent)
 			outline.Parent = visuals
 		end
 	end
-	
+
 	visuals.Parent = CoreGui
 	notedButton.Visible = true
 end
@@ -268,17 +270,17 @@ end)
 local function runTest()
 	refresh()
 	if not testRoom then testStatus.Text = "p-pick a room first y-you dummy! Hmph!"; return end
-	
+
 	local ok, placement = pcall(loadPlacement)
 	if not ok then testStatus.Text = placement; return end
-	
+
 	local rooms = SS:FindFirstChild("Assets") and SS.Assets:FindFirstChild("Rooms")
 	local straightSource = rooms and rooms:FindFirstChild(straightName)
 	if not straightSource then testStatus.Text = `Cannot find Assets.Rooms.{straightName} to put on the doors`; return end
-	
+
 	clearVisuals()
 	if lastTest and lastTest.Parent then lastTest:Destroy() end
-	
+
 	local template = testRoom:Clone()
 	local straight = straightSource:Clone()
 	local options = placement.options(template, Random.new(0))
@@ -289,13 +291,13 @@ local function runTest()
 		testStatus.Text = `{if options then straightName else testRoom.Name} needs enter and exit or 2+ parts named Door`
 		return
 	end
-	
+
 	pairCount = #options
 	local pair = options[(pairIndex - 1) % pairCount + 1]
 	local straightPair = straightOptions[1]
 	local pivot = template:GetPivot()
 	local entrance = if pair then pivot * placement.enterLocal(pair[1]) else template.Enter.CFrame
-	
+
 	local room = template:Clone()
 	local originals = {}
 	local mine, theirs = room:GetDescendants(), testRoom:GetDescendants()
@@ -304,11 +306,11 @@ local function runTest()
 	end
 	placement.place(room, entrance, pair)
 	local exit = room.Exit.CFrame
-	
+
 	local recording = ChangeHistoryService:TryBeginRecording("Room clip")
 	local folder = Instance.new("Folder")
 	folder.Name = "ClipTest_" .. testRoom.Name
-	
+
 	local before = straight:Clone()
 	if straightPair then
 		local beforePivot = entrance * placement.exitLocal(straightPair[2]):Inverse()
@@ -316,10 +318,10 @@ local function runTest()
 	else
 		before:PivotTo(entrance * before.Exit.CFrame:Inverse() * before:GetPivot())
 	end
-	
+
 	local after = straight:Clone()
 	placement.place(after, exit, straightPair)
-	
+
 	for name, model in {Before = before, After = after} do
 		model.Name = name
 		hideMarkers(model)
@@ -330,25 +332,25 @@ local function runTest()
 	template:Destroy()
 	straight:Destroy()
 	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
-	
+
 	room.Parent = folder
 	local clips = placement.clips(room, {before}, workspace, true)
 	local entranceClips = #clips
 	for _, clip in placement.clips(after, {room}, workspace, true) do table.insert(clips, clip) end
 	room:Destroy()
-	
+
 	for _, clip in clips do
 		for i, part in clip do clip[i] = originals[part] or part end
 	end
-	
+
 	local doors = if pair then `in through Door {pair[1].id}, out through Door {pair[2].id}` else "Enter/Exit"
 	refresh()
-	
+
 	if #clips == 0 then
 		testStatus.Text = `No clipping at the entrance or exit ({doors}), good job! :)`
 		return
 	end
-	
+
 	local lines = {`Entrance: {entranceClips} clip(s), exit: {#clips - entranceClips} clip(s) ({doors}), the room generator would reject this room`}
 	for i, clip in clips do
 		local text = `{clip[1].Name} hits {clip[2].Name}`
@@ -357,7 +359,7 @@ local function runTest()
 	end
 	if #clips > 6 then table.insert(lines, `...and {#clips - 6} more in Output`) end
 	testStatus.Text = table.concat(lines, "\n")
-	
+
 	showClips(clips, placement.extent)
 end
 
@@ -371,57 +373,57 @@ end)
 local function generateFloor(count)
 	local ok, placement = pcall(loadPlacement)
 	if not ok then floorStatus.Text = placement; return end
-	
+
 	local sr = startRoom()
 	local rooms = SS:FindFirstChild("Assets") and SS.Assets:FindFirstChild("Rooms")
 	if not (sr and exitOf(sr, placement)) then floorStatus.Text = "StartRoom with an exit not found"; return end
 	if not rooms or #rooms:GetChildren() == 0 then floorStatus.Text = "cannot find Asset.Rooms"; return end
-	
+
 	local old = previewFolder():FindFirstChild("Floor")
 	if old then old:Destroy() end
 	local folder = Instance.new("Folder")
 	folder.Name = "Floor"
 	folder.Parent = previewFolder()
-	
+
 	local templates = {}
 	for _, template in byName(rooms:GetChildren()) do
 		if template:IsA("Model") then table.insert(templates, template:Clone()) end
 	end
-	
+
 	local seed = Random.new():NextInteger(1, 2 ^ 31 - 1)
 	local random = Random.new(seed)
 	local models, exits, backtracks = {}, {}, 0
 	local megas = 0
 	local finished = nil
-	
+
 	--// same as the build plan function (following room generators layout)
-	
+
 	for attempt = 1, maxAttempts do
 		models, exits, backtracks = {sr}, {exitOf(sr, placement)}, 0
 		local tried = {}
 		local stuck = false
-		
+
 		while #models - 1 < count do
 			local index = #models
 			tried[index] = tried[index] or {}
-			
+
 			local candidates = table.clone(templates)
 			for i = #candidates, 2, -1 do
 				local j = random:NextInteger(1, i)
 				candidates[i], candidates[j] = candidates[j], candidates[i]
 			end
-			
+
 			local recent = {}
 			for i = math.max(1, index - overlapWindow + 1), index do table.insert(recent, models[i]) end
-			
+
 			local placed = nil
 			for _, template in candidates do
 				if tried[index][template] then continue end
 				tried[index][template] = true
-				
+
 				local options = placement.options(template, random)
 				if not options then warn(`[Generator_Plugin] {template.Name} is currently missing enter or exit or 2+ parts name door`); continue end
-				
+
 				for _, pair in options do
 					local room = template:Clone()
 					placement.place(room, exits[index], pair)
@@ -430,7 +432,7 @@ local function generateFloor(count)
 				end
 				if placed then break end
 			end
-			
+
 			if placed then
 				placed.Name = `{index}_{placed.Name}`
 				hideMarkers(placed)
@@ -446,23 +448,23 @@ local function generateFloor(count)
 				table.remove(exits)
 				backtracks += 1
 			end
-			
+
 			floorStatus.Text = `Attempt {attempt} · placing... {#models - 1}/{count} rooms, {backtracks} backtracks`
 			task.wait()
 		end
-		
+
 		if not stuck then finished = attempt; break end
 		if attempt == maxAttempts then break end
-		
+
 		megas += 1
 		warn(`[Generator_Plugin]] Mega deletion: attempt {attempt} got stuck at room {#models - 1} after {backtracks} backtracks, wiping and retrying`)
 		floorStatus.Text = `Mega deletion! Attempt {attempt} got stuck at room {#models - 1} after {backtracks} backtracks, wiping...`
 		task.wait(1)
 		folder:ClearAllChildren()
 	end
-	
+
 	for _, template in templates do template:Destroy() end
-	
+
 	local result = `{#models - 1}/{count} rooms, {backtracks} backtracks, {megas} mega deletion(s), seed {seed}`
 	floorStatus.Text = if finished then `Done on attempt {finished}: {result}` else `Gave up after {maxAttempts} attempts, the game would kick everyone: {result}`
 	floorStatus.Text ..= "\nOld rooms can overlap new ones, like in game (only the last 7 are checked)."
@@ -470,17 +472,17 @@ end
 
 floorButton.MouseButton1Click:Connect(function()
 	if generatingFloor then return end
-	
+
 	local count = tonumber(countBox.Text)
 	if not count or count < 1 then floorStatus.Text = "Enter how many rooms to place"; return end
-	
+
 	generatingFloor = true
 	floorButton.Text = "Generating..."
 	local recording = ChangeHistoryService:TryBeginRecording("Room Gen preview floor")
-	
+
 	local ok, err = pcall(generateFloor, math.floor(count))
 	if not ok then floorStatus.Text = "Error: " .. tostring(err) end
-	
+
 	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
 	floorButton.Text = floorButtonText
 	generatingFloor = false
@@ -492,6 +494,42 @@ clearButton.MouseButton1Click:Connect(function()
 	if folder then folder:Destroy() end
 	floorStatus.Text = ""
 	testStatus.Text = ""
+end)
+
+autoAssignButton.MouseButton1Click:Connect(function()
+	local selected = Selection:Get()[1]
+	local model = selected and (if selected:IsA("Model") then selected else topModel(selected))
+	if not model then testStatus.Text = "No room has been selected, please select a room in Explorer!"; return end
+
+	local AssetFolder = Instance.new("Folder", model)
+	AssetFolder.Name = "Assets"
+
+	--// Assets folder includes:
+	--[[
+		PossibleDoors
+		Spawners
+		Lights
+		RoomAsset
+	]]
+
+	local findPossibleDoors = model:FindFirstChild("PossibleDoors")
+	if not findPossibleDoors then
+		warn("PossibleDoors folder is not there! Will just create a new one")
+		local PossibleDoors = Instance.new("Folder", model)
+		PossibleDoors.Name = "PossibleDoors"
+		
+		for _, objects in model:GetChildren() do
+			if objects.Name ~= "Door" then continue end
+			objects.Parent = PossibleDoors
+		end
+		
+		if #PossibleDoors:GetChildren() == 0 then
+			warn(`[Room Gen] PossibleDoors has returned 0 (unable to find any parts named "Door")`)
+			return
+		end
+	end
+
+	refresh()
 end)
 
 refresh()
