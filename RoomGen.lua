@@ -550,11 +550,6 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	
 	for _, name in {"PossibleDoors", "Spawners", "Lights", "Waypoints"} do folderIn(model, name) end
 	
-	--// RoomAsset is not used any more, rooms organised before still have an empty one
-	local roomAsset = model:FindFirstChild("RoomAsset")
-	if roomAsset and #roomAsset:GetChildren() == 0 then roomAsset:Destroy() end
-	
-	--// spawner markers (RoomGen_Table, RoomGen_Locker, RoomGen_Drawer...) left loose in the room go into Spawners
 	local spawners = model.Spawners
 	for _, object in model:GetChildren() do
 		if object:IsA("BasePart") and object.Name:sub(1, 8) == "RoomGen_" then object.Parent = spawners end
@@ -573,19 +568,17 @@ autoAssignButton.MouseButton1Click:Connect(function()
 		warn(`[Room Gen] PossibleDoors has returned 0 (unable to find any parts named "Door")`)
 	end
 	
-	--// waypoints left loose in the room go into the Waypoints folder, and lose their wp- bit
 	local waypoints = model.Waypoints
 	for _, part in model:GetDescendants() do
 		if not part:IsA("BasePart") then continue end
 		local number = waypointNumber(part.Name)
 		if not number then continue end
-		if part.Parent == model or part:IsDescendantOf(waypoints) then --// only loose in the room, a part called 1 inside a light model stays put
+		if part.Parent == model or part:IsDescendantOf(waypoints) then
 			part.Name = number
 			part.Parent = waypoints
 		end
 	end
 	
-	--// numbering starts from a door when none of the waypoints have a number yet
 	local firstDoor = possibleDoors:FindFirstChildWhichIsA("BasePart", true)
 	local renamed = numberWaypoints(model.Waypoints, firstDoor and firstDoor.Position)
 	
@@ -611,6 +604,7 @@ assignToRooms.MouseButton1Click:Connect(function()
 		AssignStatus.Text = `WARNING! {model.Name} has not been through auto organise, click again within 3 seconds to place it anyway`
 		task.delay(3, function()
 			if wantToAssign == model then wantToAssign = nil end
+			AssignStatus.Text = ""
 		end)
 		return
 	end
