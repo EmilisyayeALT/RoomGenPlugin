@@ -517,8 +517,20 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	end
 	
 	local assetFolder = folderIn(model, "Assets")
-	local possibleDoors = folderIn(assetFolder, "PossibleDoors")
-	for _, name in {"Spawners", "Lights", "RoomAsset", "Waypoints"} do folderIn(assetFolder, name) end
+	for _, name in {"PossibleDoors", "Spawners", "Lights", "RoomAsset", "Waypoints"} do
+		--// a folder the room already has (like PossibleDoors) gets moved into Assets instead of making a new one
+		local existing = model:FindFirstChild(name)
+		local inside = assetFolder:FindFirstChild(name)
+		if existing and inside then
+			for _, child in existing:GetChildren() do child.Parent = inside end
+			existing:Destroy()
+		elseif existing then
+			existing.Parent = assetFolder
+		else
+			folderIn(assetFolder, name)
+		end
+	end
+	local possibleDoors = assetFolder.PossibleDoors
 	
 	for _, object in model:GetChildren() do
 		if object.Name == "Door" then object.Parent = possibleDoors end
