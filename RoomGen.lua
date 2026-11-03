@@ -566,7 +566,17 @@ autoAssignButton.MouseButton1Click:Connect(function()
 		oldAssets:Destroy()
 	end
 	
-	for _, name in {"PossibleDoors", "Spawners", "Lights", "RoomAsset", "Waypoints"} do folderIn(model, name) end
+	for _, name in {"PossibleDoors", "Spawners", "Lights", "Waypoints"} do folderIn(model, name) end
+	
+	--// RoomAsset is not used any more, rooms organised before still have an empty one
+	local roomAsset = model:FindFirstChild("RoomAsset")
+	if roomAsset and #roomAsset:GetChildren() == 0 then roomAsset:Destroy() end
+	
+	--// spawner markers (RoomGen_Table, RoomGen_Locker, RoomGen_Drawer...) left loose in the room go into Spawners
+	local spawners = model.Spawners
+	for _, object in model:GetChildren() do
+		if object:IsA("BasePart") and object.Name:sub(1, 8) == "RoomGen_" then object.Parent = spawners end
+	end
 	local possibleDoors = model.PossibleDoors
 	
 	for _, object in model:GetChildren() do
@@ -594,7 +604,7 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	local renamed = numberWaypoints(model.Waypoints, firstDoor and firstDoor.Position)
 	
 	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
-	AssignStatus.Text = `Made the folders in {model.Name}, {#possibleDoors:GetChildren()} door(s) in PossibleDoors{if renamed > 0 then `, numbered {renamed} waypoint(s)` else ""}`
+	AssignStatus.Text = `Made the folders in {model.Name}, {#possibleDoors:GetChildren()} door(s) in PossibleDoors, {#spawners:GetChildren()} spawner(s){if renamed > 0 then `, numbered {renamed} waypoint(s)` else ""}`
 	refresh()
 end)
 
