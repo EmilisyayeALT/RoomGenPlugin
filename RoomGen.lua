@@ -92,8 +92,10 @@ local clearButton = button("Clear generated rooms")
 local floorStatus = label("")
 
 label(" ", false)
-local autoAssignButton = button("Auto assign")
+local autoAssignButton = button("Auto organise")
 local assignToRooms = button("Place inside Rooms asset")
+label("Stuff to make room creation easier")
+local AssignStatus = label("")
 label(" ", false)
 label("Clip test", true)
 label(`Generate! puts a straight room at the rooms entrance and exit right where the room is and checks both joins.`)
@@ -118,6 +120,7 @@ local picking = nil
 local lastTest = nil
 local visuals = nil
 local generatingFloor = false
+local wantToAssign = nil
 
 local function startRoom()
 	local folder = workspace:FindFirstChild("GeneratedRooms")
@@ -499,37 +502,65 @@ end)
 autoAssignButton.MouseButton1Click:Connect(function()
 	local selected = Selection:Get()[1]
 	local model = selected and (if selected:IsA("Model") then selected else topModel(selected))
-	if not model then testStatus.Text = "No room has been selected, please select a room in Explorer!"; return end
-
-	local AssetFolder = Instance.new("Folder", model)
-	AssetFolder.Name = "Assets"
-
-	--// Assets folder includes:
-	--[[
-		PossibleDoors
-		Spawners
-		Lights
-		RoomAsset
-	]]
-
-	local findPossibleDoors = model:FindFirstChild("PossibleDoors")
-	if not findPossibleDoors then
-		warn("PossibleDoors folder is not there! Will just create a new one")
-		local PossibleDoors = Instance.new("Folder", model)
-		PossibleDoors.Name = "PossibleDoors"
-		
-		for _, objects in model:GetChildren() do
-			if objects.Name ~= "Door" then continue end
-			objects.Parent = PossibleDoors
+	if not model then AssignStatus.Text = "No room has been selected, please select a room in Explorer!"; return end
+	
+	local recording = ChangeHistoryService:TryBeginRecording("Room Gen auto organise")
+	
+	local function folderIn(parent, name)
+		local folder = parent:FindFirstChild(name)
+		if not folder then
+			folder = Instance.new("Folder")
+			folder.Name = name
+			folder.Parent = parent
 		end
-		
-		if #PossibleDoors:GetChildren() == 0 then
-			warn(`[Room Gen] PossibleDoors has returned 0 (unable to find any parts named "Door")`)
-			return
-		end
+		return folder
 	end
-
+	
+	local assetFolder = folderIn(model, "Assets")
+	local possibleDoors = folderIn(assetFolder, "PossibleDoors")
+	for _, name in {"Spawners", "Lights", "RoomAsset", "Waypoints"} do folderIn(assetFolder, name) end
+	
+	for _, object in model:GetChildren() do
+		if object.Name == "Door" then object.Parent = possibleDoors end
+	end
+	
+	if #possibleDoors:GetChildren() == 0 then
+		warn(`[Room Gen] PossibleDoors has returned 0 (unable to find any parts named "Door")`)
+	end
+	
+	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
+	AssignStatus.Text = `Made the folders in {model.Name}.Assets, {#possibleDoors:GetChildren()} door(s) in PossibleDoors`
 	refresh()
+end)
+
+assignToRooms.MouseButton1Click:Connect(function()
+	local selected = Selection:Get()[1]
+	local model = selected and (if selected:IsA("Model") then selected else topModel(selected))
+	if not model then AssignStatus.Text = "No room has been selected, please select a room in Explorer!"; return end
+	
+	local rooms = SS:FindFirstChild("Assets") and SS.Assets:FindFirstChild("Rooms")
+	if not rooms then AssignStatus.Text = "Cannot find ServerStorage.Assets.Rooms"; return end
+	if model.Parent == rooms then AssignStatus.Text = `{model.Name} is already in Assets.Rooms`; return end
+	
+	local clash = rooms:FindFirstChild(model.Name)
+	if clash then AssignStatus.Text = `Assets.Rooms already has a room called {model.Name}, rename one of them first`; return end
+	
+	if not model:FindFirstChild("Assets") and wantToAssign ~= model then
+		wantToAssign = model
+		AssignStatus.Text = `WARNING! {model.Name} has not been through auto organise, click again within 3 seconds to place it anyway`
+		task.delay(3, function()
+			if wantToAssign == model then wantToAssign = nil end
+		end)
+		return
+	end
+	
+	wantToAssign = nil
+	local recording = ChangeHistoryService:TryBeginRecording("Room Gen place in Rooms")
+	model.Parent = rooms
+	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
+	
+	Selection:Set({model})
+	AssignStatus.Text = `Placed {model.Name} inside Assets.Rooms, the generator will use it now`
 end)
 
 refresh()
