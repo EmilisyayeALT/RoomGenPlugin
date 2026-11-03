@@ -24,10 +24,14 @@ local cleanup = nil
 local loading = false
 
 --// pinned to the latest commit, raw.githubusercontent.com caches a branch for a few minutes
+--// the commit comes from git's own endpoint, the GitHub API is rate limited per network (shared school/office IPs hit it)
 local function download(): (string, string)
-	local commit = HttpService:JSONDecode(HttpService:GetAsync(`https://api.github.com/repos/{repo}/commits/{branch}`, true))
-	local source = HttpService:GetAsync(`https://raw.githubusercontent.com/{repo}/{commit.sha}/{file}`, true)
-	return source, commit.sha:sub(1, 7)
+	local refs = HttpService:GetAsync(`https://github.com/{repo}.git/info/refs?service=git-upload-pack`, true)
+	local sha = refs:match("(" .. string.rep("%x", 40) .. ") refs/heads/" .. branch .. "%f[%z%s]")
+	assert(sha, `cannot find the {branch} branch on GitHub`)
+
+	local source = HttpService:GetAsync(`https://raw.githubusercontent.com/{repo}/{sha}/{file}`, true)
+	return source, sha:sub(1, 7)
 end
 
 local function run(source: string): (boolean, string?)
