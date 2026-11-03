@@ -599,7 +599,7 @@ assignToRooms.MouseButton1Click:Connect(function()
 	local clash = rooms:FindFirstChild(model.Name)
 	if clash then AssignStatus.Text = `Assets.Rooms already has a room called {model.Name}, rename one of them first`; return end
 	
-	if not model:FindFirstChild("PossibleDoors") and wantToAssign ~= model then
+	if wantToAssign ~= model then
 		wantToAssign = model
 		AssignStatus.Text = `WARNING! {model.Name} has not been through auto organise, click again within 3 seconds to place it anyway`
 		task.delay(3, function()
