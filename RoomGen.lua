@@ -499,6 +499,16 @@ clearButton.MouseButton1Click:Connect(function()
 	testStatus.Text = ""
 end)
 
+local function folderIn(parent, name)
+	local folder = parent:FindFirstChild(name)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = name
+		folder.Parent = parent
+	end
+	return folder
+end
+
 autoAssignButton.MouseButton1Click:Connect(function()
 	local selected = Selection:Get()[1]
 	local model = selected and (if selected:IsA("Model") then selected else topModel(selected))
@@ -506,31 +516,23 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	
 	local recording = ChangeHistoryService:TryBeginRecording("Room Gen auto organise")
 	
-	local function folderIn(parent, name)
-		local folder = parent:FindFirstChild(name)
-		if not folder then
-			folder = Instance.new("Folder")
-			folder.Name = name
-			folder.Parent = parent
+	--// rooms organised before had an Assets folder, its folders go back into the room (merged if the room has one too)
+	local oldAssets = model:FindFirstChild("Assets")
+	if oldAssets then
+		for _, folder in oldAssets:GetChildren() do
+			local existing = model:FindFirstChild(folder.Name)
+			if existing then
+				for _, child in folder:GetChildren() do child.Parent = existing end
+				folder:Destroy()
+			else
+				folder.Parent = model
+			end
 		end
-		return folder
+		oldAssets:Destroy()
 	end
 	
-	local assetFolder = folderIn(model, "Assets")
-	for _, name in {"PossibleDoors", "Spawners", "Lights", "RoomAsset", "Waypoints"} do
-		--// a folder the room already has (like PossibleDoors) gets moved into Assets instead of making a new one
-		local existing = model:FindFirstChild(name)
-		local inside = assetFolder:FindFirstChild(name)
-		if existing and inside then
-			for _, child in existing:GetChildren() do child.Parent = inside end
-			existing:Destroy()
-		elseif existing then
-			existing.Parent = assetFolder
-		else
-			folderIn(assetFolder, name)
-		end
-	end
-	local possibleDoors = assetFolder.PossibleDoors
+	for _, name in {"PossibleDoors", "Spawners", "Lights", "RoomAsset", "Waypoints"} do folderIn(model, name) end
+	local possibleDoors = model.PossibleDoors
 	
 	for _, object in model:GetChildren() do
 		if object.Name == "Door" then object.Parent = possibleDoors end
@@ -541,7 +543,7 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	end
 	
 	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
-	AssignStatus.Text = `Made the folders in {model.Name}.Assets, {#possibleDoors:GetChildren()} door(s) in PossibleDoors`
+	AssignStatus.Text = `Made the folders in {model.Name}, {#possibleDoors:GetChildren()} door(s) in PossibleDoors`
 	refresh()
 end)
 
@@ -557,7 +559,7 @@ assignToRooms.MouseButton1Click:Connect(function()
 	local clash = rooms:FindFirstChild(model.Name)
 	if clash then AssignStatus.Text = `Assets.Rooms already has a room called {model.Name}, rename one of them first`; return end
 	
-	if not model:FindFirstChild("Assets") and wantToAssign ~= model then
+	if not model:FindFirstChild("PossibleDoors") and wantToAssign ~= model then
 		wantToAssign = model
 		AssignStatus.Text = `WARNING! {model.Name} has not been through auto organise, click again within 3 seconds to place it anyway`
 		task.delay(3, function()
