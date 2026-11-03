@@ -1,0 +1,91 @@
+--// Room Gen loader: the only file you install, it downloads RoomGen.lua from GitHub and runs it
+--// Reload grabs the newest version without restarting Studio, the last download is kept for when GitHub can't be reached
+
+local HttpService = game:GetService("HttpService")
+
+local repo = "EmilisyayeALT/RoomGenPlugin"
+local branch = "main"
+local file = "RoomGen.lua"
+
+local toolbar = plugin:CreateToolbar("Room Generation")
+local openButton = toolbar:CreateButton("Room Gen", "Generate preview floors and clip test rooms (does require the RoomGenerator module!)", "")
+openButton.ClickableWhenViewportHidden = true
+local reloadButton = toolbar:CreateButton("Reload", "Download the newest Room Gen from GitHub", "")
+reloadButton.ClickableWhenViewportHidden = true
+
+local widget = plugin:CreateDockWidgetPluginGui("RoomGenWidget", DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Right, false, false, 300, 460, 240, 300))
+widget.Title = "RoomGen"
+widget.Name = "Generator"
+
+openButton.Click:Connect(function() widget.Enabled = not widget.Enabled end)
+widget:GetPropertyChangedSignal("Enabled"):Connect(function() openButton:SetActive(widget.Enabled) end)
+
+local cleanup = nil
+local loading = false
+
+--// pinned to the latest commit, raw.githubusercontent.com caches a branch for a few minutes
+local function download(): (string, string)
+	local commit = HttpService:JSONDecode(HttpService:GetAsync(`https://api.github.com/repos/{repo}/commits/{branch}`, true))
+	local source = HttpService:GetAsync(`https://raw.githubusercontent.com/{repo}/{commit.sha}/{file}`, true)
+	return source, commit.sha:sub(1, 7)
+end
+
+local function run(source: string): (boolean, string?)
+	--// RoomGen.lua is written as a plain script, wrapping it hands it the plugin and the panel
+	local module = Instance.new("ModuleScript")
+	module.Name = "RoomGen"
+	module.Source = "return function(plugin, widget)\n" .. source .. "\nend"
+
+	local ok, start = pcall(require, module)
+	if not ok then return false, `has an error: {start}` end
+
+	local started, result = pcall(start, plugin, widget)
+	if not started then return false, `crashed while starting: {result}` end
+
+	cleanup = if type(result) == "function" then result else nil
+	return true
+end
+
+local function stop()
+	if cleanup then pcall(cleanup) end
+	cleanup = nil
+	widget:ClearAllChildren()
+end
+
+local function load()
+	if loading then return end
+	loading = true
+
+	local ok, source, version = pcall(download)
+	if ok then
+		stop()
+		local ran, problem = run(source)
+		if ran then
+			plugin:SetSetting("RoomGenSource", source)
+			plugin:SetSetting("RoomGenVersion", version)
+			print(`[Room Gen] loaded {version} from GitHub`)
+		else
+			warn(`[Room Gen] the newest version ({version}) {problem}, going back to the last working one`)
+			stop()
+			local cached = plugin:GetSetting("RoomGenSource")
+			if cached then run(cached) end
+		end
+	elseif cleanup == nil then
+		--// can't reach GitHub and nothing is running yet, use the last download
+		local cached = plugin:GetSetting("RoomGenSource")
+		warn(`[Room Gen] cannot reach GitHub ({source}), {if cached then "using the last download (" .. tostring(plugin:GetSetting("RoomGenVersion")) .. ")" else "and there is no saved copy yet"}`)
+		if cached then run(cached) end
+	else
+		warn(`[Room Gen] cannot reach GitHub ({source}), keeping the version that is running`)
+	end
+
+	loading = false
+end
+
+reloadButton.Click:Connect(function()
+	reloadButton:SetActive(false)
+	load()
+end)
+plugin.Unloading:Connect(stop)
+
+load()
