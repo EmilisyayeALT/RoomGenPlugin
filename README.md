@@ -4,7 +4,7 @@ Roblox Studio plugin for Last Transmission: preview floors and clip-test rooms u
 
 ## Install (once)
 
-Put **`RoomGenLoader.lua`** in your Studio plugins folder and restart Studio:
+Copy **`RoomGenLoader.lua`** into your Studio plugins folder and restart Studio (a real copy, Studio ignores symlinks):
 
 - macOS: `~/Documents/Roblox/Plugins/`
 - Windows: `%LOCALAPPDATA%\Roblox\Plugins\`
