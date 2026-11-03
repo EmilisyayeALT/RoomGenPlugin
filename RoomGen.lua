@@ -13,7 +13,6 @@
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local CoreGui = game:GetService("CoreGui")
-local PathfindingService = game:GetService("PathfindingService")
 local Selection = game:GetService("Selection")
 local SS = game:GetService("ServerStorage")
 local SSS = game:GetService("ServerScriptService")
@@ -94,7 +93,6 @@ local floorStatus = label("")
 
 label(" ", false)
 local autoAssignButton = button("Auto organise")
-local waypointsButton = button("Make waypoints")
 local assignToRooms = button("Place inside Rooms asset")
 label("Stuff to make room creation easier")
 local AssignStatus = label("")
@@ -533,128 +531,6 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
 	AssignStatus.Text = `Made the folders in {model.Name}.Assets, {#possibleDoors:GetChildren()} door(s) in PossibleDoors`
 	refresh()
-end)
-
---// waypoints: walks the room with Roblox pathfinding from door to door and keeps only the corners
---// the game walks Enter -> 1, 2, 3... -> Exit and flips the order itself, so one path works both ways
-
---// drops every point that sits on a straight line between its neighbours (Ramer-Douglas-Peucker)
-local function corners(points, tolerance)
-	local first, last = points[1], points[#points]
-	local line = last - first
-	local far, farIndex = 0, nil
-	for i = 2, #points - 1 do
-		local offset = points[i] - first
-		local distance = if line.Magnitude > 0 then (offset - line.Unit * offset:Dot(line.Unit)).Magnitude else offset.Magnitude
-		if distance > far then far, farIndex = distance, i end
-	end
-	if not farIndex or far <= tolerance then return {first, last} end
-	
-	local left = corners(table.move(points, 1, farIndex, 1, {}), tolerance)
-	local right = corners(table.move(points, farIndex, #points, 1, {}), tolerance)
-	table.remove(left)
-	return table.move(right, 1, #right, #left + 1, left)
-end
-
-local function findWaypoints(model, placement)
-	--// doorways tags Door parts with DoorId, so it gets a copy instead of your room
-	local copy = model:Clone()
-	local ways = placement.doorways(copy)
-	copy:Destroy()
-	
-	local pivot = model:GetPivot()
-	local doors = {}
-	if ways and #ways >= 2 then
-		for i = 1, 2 do table.insert(doors, {cf = pivot * ways[i].cf, height = ways[i].size.Y}) end
-	elseif model:FindFirstChild("Enter") and model:FindFirstChild("Exit") then
-		for _, name in {"Enter", "Exit"} do table.insert(doors, {cf = model[name].CFrame, height = model[name].Size.Y}) end
-	else
-		return nil, "needs 2 parts named Door (or Enter and Exit)"
-	end
-	
-	local center = model:GetBoundingBox().Position
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = {model}
-	
-	--// start a few studs inside each door, standing on the floor
-	local ends = {}
-	for _, door in doors do
-		local position = door.cf.Position
-		position += ((center - position) * Vector3.new(1, 0, 1)).Unit * 3
-		local hit = workspace:Raycast(position, Vector3.new(0, -door.height, 0), params)
-		if not hit then return nil, "cannot find the floor next to a door" end
-		table.insert(ends, hit.Position + Vector3.new(0, 2.5, 0))
-	end
-	
-	--// a room that was just moved needs a moment before pathfinding knows about it
-	local path = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true})
-	for _ = 1, 4 do
-		path:ComputeAsync(ends[1], ends[2])
-		if path.Status == Enum.PathStatus.Success then break end
-		task.wait(1)
-	end
-	if path.Status ~= Enum.PathStatus.Success then return nil, "pathfinding cannot find a way between the doors, is something blocking it?" end
-	
-	local points = {}
-	for _, waypoint in path:GetWaypoints() do table.insert(points, waypoint.Position) end
-	
-	--// the doors themselves are Enter and Exit in game, only the corners in between are needed
-	local kept = corners(points, 1)
-	table.remove(kept, 1)
-	table.remove(kept)
-	
-	--// pathfinding gives floor height, the game's waypoints sit at door height
-	for i, point in kept do kept[i] = point + Vector3.new(0, doors[1].height / 2, 0) end
-	return kept
-end
-
-local makingWaypoints = false
-waypointsButton.MouseButton1Click:Connect(function()
-	if makingWaypoints then return end
-	
-	local selected = Selection:Get()[1]
-	local model = selected and (if selected:IsA("Model") then selected else topModel(selected))
-	if not model then AssignStatus.Text = "No room has been selected, please select a room in Explorer!"; return end
-	if not model:IsDescendantOf(workspace) then AssignStatus.Text = `{model.Name} has to be in Workspace for pathfinding to walk it`; return end
-	
-	local ok, placement = pcall(loadPlacement)
-	if not ok then AssignStatus.Text = placement; return end
-	
-	makingWaypoints = true
-	waypointsButton.Text = "Walking the room..."
-	local found, problem = findWaypoints(model, placement)
-	waypointsButton.Text = "Make waypoints"
-	makingWaypoints = false
-	if not found then AssignStatus.Text = `{model.Name} {problem}`; return end
-	
-	local recording = ChangeHistoryService:TryBeginRecording("Room Gen waypoints")
-	
-	local folder = model:FindFirstChild("Waypoints", true)
-	if not folder then
-		local parent = model:FindFirstChild("Assets") or model
-		folder = Instance.new("Folder")
-		folder.Name = "Waypoints"
-		folder.Parent = parent
-	end
-	folder:ClearAllChildren()
-	
-	for i, point in found do
-		local node = Instance.new("Part")
-		node.Name = tostring(i)
-		node.Size = Vector3.new(1, 1, 1)
-		node.Position = point
-		node.Anchored = true
-		node.CanCollide = false
-		node.CanQuery = false
-		node.CanTouch = false
-		node.Transparency = 1
-		node.Parent = folder
-	end
-	
-	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
-	Selection:Set(folder:GetChildren())
-	AssignStatus.Text = if #found == 0 then `{model.Name} is a straight walk, no waypoints needed` else `Made {#found} waypoint(s) in {model.Name}, they are selected so you can see them`
 end)
 
 assignToRooms.MouseButton1Click:Connect(function()
