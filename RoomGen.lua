@@ -509,6 +509,35 @@ local function folderIn(parent, name)
 	return folder
 end
 
+--// gives unnumbered waypoint parts a number, nearest first, the same order the game would walk them in
+--// parts that already have a number are left alone, the new ones carry on after the highest
+local function numberWaypoints(folder, start)
+	local numbered, loose = {}, {}
+	for _, node in folder:GetDescendants() do
+		if not node:IsA("BasePart") then continue end
+		local number = tonumber(node.Name:match("%d+"))
+		if number then table.insert(numbered, {number = number, node = node}) else table.insert(loose, node) end
+	end
+	table.sort(numbered, function(a, b) return a.number < b.number end)
+	
+	local last = if #numbered > 0 then numbered[#numbered].node.Position else start
+	local nextNumber = if #numbered > 0 then numbered[#numbered].number + 1 else 1
+	local renamed = #loose
+	while #loose > 0 do
+		local best, bestDistance = 1, math.huge
+		for i, node in loose do
+			local distance = if last then (node.Position - last).Magnitude else 0
+			if distance < bestDistance then best, bestDistance = i, distance end
+		end
+		local node = table.remove(loose, best)
+		node.Name = tostring(nextNumber)
+		nextNumber += 1
+		last = node.Position
+	end
+	
+	return renamed
+end
+
 autoAssignButton.MouseButton1Click:Connect(function()
 	local selected = Selection:Get()[1]
 	local model = selected and (if selected:IsA("Model") then selected else topModel(selected))
@@ -542,8 +571,12 @@ autoAssignButton.MouseButton1Click:Connect(function()
 		warn(`[Room Gen] PossibleDoors has returned 0 (unable to find any parts named "Door")`)
 	end
 	
+	--// numbering starts from a door when none of the waypoints have a number yet
+	local firstDoor = possibleDoors:FindFirstChildWhichIsA("BasePart", true)
+	local renamed = numberWaypoints(model.Waypoints, firstDoor and firstDoor.Position)
+	
 	if recording then ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit) end
-	AssignStatus.Text = `Made the folders in {model.Name}, {#possibleDoors:GetChildren()} door(s) in PossibleDoors`
+	AssignStatus.Text = `Made the folders in {model.Name}, {#possibleDoors:GetChildren()} door(s) in PossibleDoors{if renamed > 0 then `, numbered {renamed} waypoint(s)` else ""}`
 	refresh()
 end)
 
