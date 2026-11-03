@@ -509,14 +509,11 @@ local function folderIn(parent, name)
 	return folder
 end
 
---// "3", "wp-3", "WP_3", "waypoint 3", "Waypoint3" all count as waypoint 3, anything else (like "Part3") does not
 local function waypointNumber(name)
 	local lower = name:lower()
 	return lower:match("^(%d+)$") or lower:match("^wp[%s%-_]*(%d+)$") or lower:match("^waypoint[%s%-_]*(%d+)$")
 end
 
---// gives unnumbered waypoint parts a number, nearest first, the same order the game would walk them in
---// parts that already have a number are left alone, the new ones carry on after the highest
 local function numberWaypoints(folder, start)
 	local numbered, loose = {}, {}
 	for _, node in folder:GetDescendants() do
@@ -551,21 +548,6 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	
 	local recording = ChangeHistoryService:TryBeginRecording("Room Gen auto organise")
 	
-	--// rooms organised before had an Assets folder, its folders go back into the room (merged if the room has one too)
-	local oldAssets = model:FindFirstChild("Assets")
-	if oldAssets then
-		for _, folder in oldAssets:GetChildren() do
-			local existing = model:FindFirstChild(folder.Name)
-			if existing then
-				for _, child in folder:GetChildren() do child.Parent = existing end
-				folder:Destroy()
-			else
-				folder.Parent = model
-			end
-		end
-		oldAssets:Destroy()
-	end
-	
 	for _, name in {"PossibleDoors", "Spawners", "Lights", "Waypoints"} do folderIn(model, name) end
 	
 	--// RoomAsset is not used any more, rooms organised before still have an empty one
@@ -576,6 +558,10 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	local spawners = model.Spawners
 	for _, object in model:GetChildren() do
 		if object:IsA("BasePart") and object.Name:sub(1, 8) == "RoomGen_" then object.Parent = spawners end
+	end
+	local lightFolder = model.Lights
+	for _, object in model:GetChildren() do
+		if object:IsA("Model") and object.Name == "WallLight" then object.Parent = lightFolder end
 	end
 	local possibleDoors = model.PossibleDoors
 	
