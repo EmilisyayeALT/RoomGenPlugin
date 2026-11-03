@@ -27,7 +27,7 @@ local loading = false
 --// the commit comes from git's own endpoint, the GitHub API is rate limited per network (shared school/office IPs hit it)
 local function download(): (string, string)
 	local refs = HttpService:GetAsync(`https://github.com/{repo}.git/info/refs?service=git-upload-pack`, true)
-	local sha = refs:match("(" .. string.rep("%x", 40) .. ") refs/heads/" .. branch .. "%f[%z%s]")
+	local sha = refs:match("(" .. string.rep("%x", 40) .. ") refs/heads/" .. branch .. "[\0\n]")
 	assert(sha, `cannot find the {branch} branch on GitHub`)
 
 	local source = HttpService:GetAsync(`https://raw.githubusercontent.com/{repo}/{sha}/{file}`, true)
