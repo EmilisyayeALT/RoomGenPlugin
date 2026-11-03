@@ -603,8 +603,7 @@ assignToRooms.MouseButton1Click:Connect(function()
 		wantToAssign = model
 		AssignStatus.Text = `WARNING! {model.Name} has not been through auto organise, click again within 3 seconds to place it anyway`
 		task.delay(3, function()
-			if wantToAssign == model then wantToAssign = nil end
-			AssignStatus.Text = ""
+			if wantToAssign == model then wantToAssign = nil; AssignStatus.Text = "" end
 		end)
 		return
 	end
