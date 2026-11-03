@@ -509,6 +509,12 @@ local function folderIn(parent, name)
 	return folder
 end
 
+--// "3", "wp-3", "WP_3", "waypoint 3", "Waypoint3" all count as waypoint 3, anything else (like "Part3") does not
+local function waypointNumber(name)
+	local lower = name:lower()
+	return lower:match("^(%d+)$") or lower:match("^wp[%s%-_]*(%d+)$") or lower:match("^waypoint[%s%-_]*(%d+)$")
+end
+
 --// gives unnumbered waypoint parts a number, nearest first, the same order the game would walk them in
 --// parts that already have a number are left alone, the new ones carry on after the highest
 local function numberWaypoints(folder, start)
@@ -569,6 +575,18 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	
 	if #possibleDoors:GetChildren() == 0 then
 		warn(`[Room Gen] PossibleDoors has returned 0 (unable to find any parts named "Door")`)
+	end
+	
+	--// waypoints left loose in the room go into the Waypoints folder, and lose their wp- bit
+	local waypoints = model.Waypoints
+	for _, part in model:GetDescendants() do
+		if not part:IsA("BasePart") then continue end
+		local number = waypointNumber(part.Name)
+		if not number then continue end
+		if part.Parent == model or part:IsDescendantOf(waypoints) then --// only loose in the room, a part called 1 inside a light model stays put
+			part.Name = number
+			part.Parent = waypoints
+		end
 	end
 	
 	--// numbering starts from a door when none of the waypoints have a number yet
