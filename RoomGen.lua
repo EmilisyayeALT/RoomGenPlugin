@@ -548,7 +548,7 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	
 	local recording = ChangeHistoryService:TryBeginRecording("Room Gen auto organise")
 	
-	for _, name in {"PossibleDoors", "Spawners", "Lights", "Waypoints"} do folderIn(model, name) end
+	for _, name in {"PossibleDoors", "Spawners", "Lights", "Waypoints", "Assets"} do folderIn(model, name) end
 	
 	local spawners = model.Spawners
 	for _, object in model:GetChildren() do
@@ -577,6 +577,13 @@ autoAssignButton.MouseButton1Click:Connect(function()
 			part.Name = number
 			part.Parent = waypoints
 		end
+	end
+	
+	--// everything else in the room goes into Assets, Enter and Exit stay on top because the generator looks for them there
+	local assetFolder = model.Assets
+	for _, object in model:GetChildren() do
+		if object:IsA("Folder") or object.Name == "Enter" or object.Name == "Exit" then continue end
+		object.Parent = assetFolder
 	end
 	
 	local firstDoor = possibleDoors:FindFirstChildWhichIsA("BasePart", true)
