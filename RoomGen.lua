@@ -558,6 +558,10 @@ autoAssignButton.MouseButton1Click:Connect(function()
 	for _, object in model:GetChildren() do
 		if object:IsA("Model") and object.Name == "WallLight" then object.Parent = lightFolder end
 	end
+	local ceilingLightFolder = folderIn(lightFolder, "CeilingLights")
+	for _, object in model:GetChildren() do
+		if object:IsA("Model") and object.Name == "CeilingLight" then object.Parent = ceilingLightFolder end
+	end
 	local possibleDoors = model.PossibleDoors
 	
 	for _, object in model:GetChildren() do
